@@ -234,6 +234,7 @@ private:
     mutable std::map<Status,
                      std::pair<uint64_t, std::chrono::steady_clock::time_point>>
         cachedStatus; ///< Cache for periodic status data
+    mutable bool missing{false}; // has the Spark max missed transmitting for several periods?
 
     /**
      * @brief Sends a CAN frame
@@ -444,6 +445,12 @@ public:
      * @return bool True if the motor is inverted, false otherwise
      */
     bool GetInverted() const;
+    
+    /**
+     * @brief checks if the motor has missed transmitting for more than 5(or what you changed it to) periods
+     * @return if the motor is missing or not
+     */
+    bool GetMissing() const;
 
     /**
      * @brief Gets the current idle mode

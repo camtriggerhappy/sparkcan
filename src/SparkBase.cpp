@@ -126,9 +126,11 @@ uint64_t SparkBase::ReadPeriodicStatus(Status period) const
 {
     constexpr int CACHE_TIMEOUT_MS = 100;  // Cache timeout in milliseconds
     constexpr int READ_TIMEOUT_US = 20000; // Timeout for reading CAN frame
+    constexpr int MAX_MISSED = 5; // number of missed periodic statuses before the spark max should be considered missing
 
     auto now = std::chrono::steady_clock::now();
     auto it = cachedStatus.find(period);
+    int missedPeriods = 0;
 
     // Return cached status if within timeout period
     if (it != cachedStatus.end())
@@ -147,9 +149,15 @@ uint64_t SparkBase::ReadPeriodicStatus(Status period) const
     FD_ZERO(&read_fds);
     FD_SET(soc, &read_fds);
 
+    if(missedPeriods >= 5){
+        missing = true;
+    }
+
     int ret = select(soc + 1, &read_fds, nullptr, nullptr, &tv);
     if (ret > 0)
     {
+        missedPeriods = 0;
+        missing = false;
         ssize_t bytesRead = read(soc, &response, sizeof(response));
         if (bytesRead > 0)
         {
@@ -165,6 +173,7 @@ uint64_t SparkBase::ReadPeriodicStatus(Status period) const
                     newValue |= static_cast<uint64_t>(response.data[i]) << (8 * i);
                 }
                 cachedStatus[period] = {newValue, now};
+                missedPeriods = 0;
                 return newValue;
             }
         }
@@ -173,9 +182,11 @@ uint64_t SparkBase::ReadPeriodicStatus(Status period) const
     // Return cached value if no new data received
     if (it != cachedStatus.end())
     {
+        missedPeriods++;
         return it->second.first;
+        
     }
-
+    missedPeriods++;
     return 0; // Default return if no cached or new value
 }
 
@@ -496,6 +507,10 @@ float SparkBase::GetCurrent() const
     uint16_t current = (status >> 52) & 0xFFF;
 
     return static_cast<float>(current) / 32.0f;
+}
+
+bool SparkBase::GetMissing()    const{
+    return missing;
 }
 
 // Period 2 //
